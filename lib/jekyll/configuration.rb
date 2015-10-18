@@ -13,7 +13,7 @@ module Jekyll
       'layouts_dir'   => '_layouts',
       'data_dir'      => '_data',
       'includes_dir'  => '_includes',
-      'collections'   => nil,
+      'collections'   => {},
 
       # Handling Reading
       'safe'          => false,
@@ -186,7 +186,7 @@ module Jekyll
         $stderr.puts "#{err}"
       end
 
-      configuration.fix_common_issues.backwards_compatibilize
+      configuration.fix_common_issues.backwards_compatibilize.add_default_collections
     end
 
     # Public: Split a CSV string into an array containing its values
@@ -271,6 +271,25 @@ module Jekyll
           " positive integer or nil. It's currently set to '#{config['paginate'].inspect}'."
         config['paginate'] = nil
       end
+
+      config
+    end
+
+    def add_default_collections
+      config = clone
+
+      return config if config['collections'].nil?
+
+      if config['collections'].is_a?(Array)
+        config['collections'] = config['collections'].reduce({}) do |memo, coll|
+          memo[coll] ||= {}
+          memo
+        end
+      end
+      p Utils.deep_merge_hashes!(
+        config['collections'],
+        { "posts" => { "output" => true, "permalink" => config['permalink'] } }
+      )
 
       config
     end

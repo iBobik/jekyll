@@ -7,6 +7,7 @@ module Jekyll
     attr_reader :path, :site, :extname, :output_ext, :content, :output, :collection
 
     YAML_FRONT_MATTER_REGEXP = /\A(---\s*\n.*?\n?)^((---|\.\.\.)\s*$\n?)/m
+    DATE_FILENAME_MATCHER = /^(.+\/)*(\d+-\d+-\d+)-(.*)(\.[^.]+)$/
 
     # Create a new Document.
     #
@@ -21,6 +22,12 @@ module Jekyll
       @output_ext = Jekyll::Renderer.new(site, self).output_ext
       @collection = relations[:collection]
       @has_yaml_header = nil
+
+      merge_data!({'categories' => File.dirname(relative_path).split('/').reject { |x| x.empty? } })
+
+      data.default_proc = proc do |hash, key|
+        site.frontmatter_defaults.find(relative_path, collection.label, key)
+      end
     end
 
     def output=(output)
@@ -39,6 +46,56 @@ module Jekyll
     #   no data was read.
     def data
       @data ||= Hash.new
+    end
+
+    # Merge some data in with this document's data.
+    #
+    # Returns the merged data.
+    def merge_data!(other)
+      p "Merging:", other
+      if other.key?('categories')
+        if other['categories'].is_a?(String)
+          other['categories'] = other['categories'].split(" ").map(&:strip)
+        end
+        other['categories'] = other['categories'] | (data['categories'] || [])
+      end
+      Utils.deep_merge_hashes!(data, other)
+      if data.key?('date') && !data['date'].is_a?(Time)
+         data['date'] = Utils.parse_date(data['date'].to_s, "Document '#{relative_path}' does not have a valid date in the YAML front matter.")
+      end
+      data
+    end
+
+    def post_read
+      if DATE_FILENAME_MATCHER =~ relative_path
+        m, cats, date, slug, ext = *relative_path.match(DATE_FILENAME_MATCHER)
+        merge_data!({
+          "date" => date,
+          "slug" => slug,
+          "ext"  => ext
+        })
+        data['title'] ||= slug.split('-').select {|w| w.capitalize! || w }.join(' ')
+      end
+      populate_categories
+      populate_tags
+    end
+
+    def populate_categories
+      merge_data!({
+        "categories" => (
+          Array(data['categories']) + Utils.pluralized_array_from_hash(data, 'category', 'categories')
+        ).map { |c| c.to_s }.flatten.uniq
+      })
+    end
+
+    def populate_tags
+      merge_data!({
+        "tags" => Utils.pluralized_array_from_hash(data, "tag", "tags").flatten
+      })
+    end
+
+    def date
+      data['date'] ||= Time.now
     end
 
     # The path to the document, relative to the site source.
@@ -138,11 +195,23 @@ module Jekyll
     # Returns the Hash of key-value pairs for replacement in the URL.
     def url_placeholders
       {
-        collection: collection.label,
-        path:       cleaned_relative_path,
-        output_ext: output_ext,
-        name:       Utils.slugify(basename_without_ext),
-        title:      Utils.slugify(data['slug']) || Utils.slugify(basename_without_ext)
+        collection:  collection.label,
+        path:        cleaned_relative_path,
+        output_ext:  output_ext,
+        name:        Utils.slugify(basename_without_ext),
+        title:       data['slug'] || Utils.slugify(data['slug']) || Utils.slugify(basename_without_ext),
+        year:        date.strftime("%Y"),
+        month:       date.strftime("%m"),
+        day:         date.strftime("%d"),
+        hour:        date.strftime("%H"),
+        minute:      date.strftime("%M"),
+        second:      date.strftime("%S"),
+        i_day:       date.strftime("%-d"),
+        i_month:     date.strftime("%-m"),
+        categories:  (data['categories'] || []).map { |c| c.to_s.downcase }.uniq.join('/'),
+        short_month: date.strftime("%b"),
+        short_year:  date.strftime("%y"),
+        y_day:       date.strftime("%j"),
       }
     end
 
@@ -223,17 +292,16 @@ module Jekyll
       else
         begin
           defaults = @site.frontmatter_defaults.all(url, collection.label.to_sym)
-          unless defaults.empty?
-            @data = defaults
-          end
+          merge_data!(defaults) unless defaults.empty?
+
           self.content = File.read(path, merged_file_read_opts(opts))
           if content =~ YAML_FRONT_MATTER_REGEXP
             self.content = $POSTMATCH
             data_file = SafeYAML.load($1)
-            unless data_file.nil?
-              @data = Utils.deep_merge_hashes(defaults, data_file)
-            end
+            merge_data!(data_file) unless data_file.nil?
           end
+
+          post_read
         rescue SyntaxError => e
           puts "YAML Exception reading #{path}: #{e.message}"
         rescue Exception => e
@@ -281,7 +349,11 @@ module Jekyll
     # Returns -1, 0, +1 or nil depending on whether this doc's path is less than,
     #   equal or greater than the other doc's path. See String#<=> for more details.
     def <=>(anotherDocument)
-      path <=> anotherDocument.path
+      cmp = data['date'] <=> anotherDocument.data['date']
+      if 0 == cmp
+        cmp = path <=> anotherDocument.path
+      end
+      cmp
     end
 
     # Determine whether this document should be written.
