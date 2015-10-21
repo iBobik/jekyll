@@ -23,7 +23,8 @@ module Jekyll
       @collection = relations[:collection]
       @has_yaml_header = nil
 
-      merge_data!({'categories' => File.dirname(relative_path).split('/').reject { |x| x.empty? } })
+      subdirs = relative_path.split(File::PATH_SEPARATOR).tap{ |dirs| dirs.shift }.reject(&:empty?)
+      merge_data!({'categories' => subdirs })
 
       data.default_proc = proc do |hash, key|
         site.frontmatter_defaults.find(relative_path, collection.label, key)
@@ -52,7 +53,6 @@ module Jekyll
     #
     # Returns the merged data.
     def merge_data!(other)
-      p "Merging:", other
       if other.key?('categories')
         if other['categories'].is_a?(String)
           other['categories'] = other['categories'].split(" ").map(&:strip)
@@ -286,6 +286,8 @@ module Jekyll
     # Returns nothing.
     def read(opts = {})
       @to_liquid = nil
+
+      Jekyll.logger.debug "Reading:", relative_path
 
       if yaml_file?
         @data = SafeYAML.load_file(path)

@@ -23,7 +23,7 @@ module Jekyll
     #
     # Returns the output extname including the leading period.
     def output_ext
-      converters.first.output_ext(document.extname)
+      @output_ext ||= converters.first.output_ext(document.extname)
     end
 
     ######################
@@ -31,6 +31,8 @@ module Jekyll
     ######################
 
     def run
+      Jekyll.logger.debug "Rendering:", document.relative_path
+
       payload = Utils.deep_merge_hashes({
         "page" => document.to_liquid
       }, site_payload || site.site_payload)

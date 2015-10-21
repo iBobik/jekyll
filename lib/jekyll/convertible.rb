@@ -239,6 +239,8 @@ module Jekyll
     #
     # Returns nothing.
     def do_layout(payload, layouts)
+      Jekyll.logger.debug "Rendering:", self.relative_path
+
       Jekyll::Hooks.trigger hook_owner, :pre_render, self, payload
       info = { :filters => [Jekyll::Filters], :registers => { :site => site, :page => payload['page'] } }
 
@@ -247,6 +249,7 @@ module Jekyll
       payload["highlighter_suffix"] = converters.first.highlighter_suffix
 
       self.content = render_liquid(content, payload, info, path) if render_with_liquid?
+      p self.content
       self.content = transform
 
       # output keeps track of what will finally be written

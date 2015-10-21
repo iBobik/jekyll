@@ -57,3 +57,6 @@ end
 # Temp
 gem 'jemoji'
 gem 'jekyll-sitemap'
+gem 'jekyll-mentions'
+gem 'jekyll-redirect-from'
+gem 'liquid', github: 'Shopify/liquid'

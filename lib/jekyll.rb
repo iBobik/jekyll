@@ -30,7 +30,6 @@ require 'kramdown'
 require 'colorator'
 
 SafeYAML::OPTIONS[:suppress_warnings] = true
-Liquid::Template.error_mode = :strict
 
 module Jekyll
 
